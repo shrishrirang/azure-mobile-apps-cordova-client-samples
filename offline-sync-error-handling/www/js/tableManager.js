@@ -22,7 +22,7 @@ define(['./lib/es6-promise'], function(es6) {
         }
 
         // Create a connection reference to our Azure Mobile Apps backend 
-        client = new WindowsAzure.MobileServiceClient('https://shrirs-offline-dotnet.azurewebsites.net'); 
+        client = new WindowsAzure.MobileServiceClient('http://mobile-app-name.azurewebsites.net');
 
         // Create the sqlite store
         store = new WindowsAzure.MobileServiceSqliteStore();
@@ -44,11 +44,11 @@ define(['./lib/es6-promise'], function(es6) {
                     syncContext.pushHandler = {
                         onConflict: onConflict,
                         onError: function (pushError) {
-                            if (pushError.getError().request.status === 404) { // Treat this as a conflict
+                            if (pushError.getError().request.status === 404) { // Treat 404 as a conflict
                                 return onConflict(pushError);
                             }
 
-                            window.alert('TODO: Handle non-conflict error!');
+                            return handleError('TODO: Handle non-conflict error!');
                         }
                     };
                     return syncContext.initialize(store);
@@ -61,75 +61,90 @@ define(['./lib/es6-promise'], function(es6) {
 
     function onConflict(pushError) {
 
+        switch(pushError.getAction()) {
+            case 'insert':
+                return handleInsertConflict(pushError);
+            case 'update':
+                return handleUpdateConflict(pushError);
+            case 'delete':
+                return handleDeleteConflict(pushError);
+        }
+
+        return handleError('Unhandled conflict!')
+    }
+
+    function handleInsertConflict(pushError) {
+        // An insert operation will conflict only if the record's ID is not generated as a GUID
+        // As we use a GUID for the record ID, there is no action needed here!
+        return handleError('Never expected the handleInsertConflict handler to be invoked!');
+    }
+
+    function handleUpdateConflict(pushError) {
         var serverRecord = pushError.getServerRecord(),
             clientRecord = pushError.getClientRecord(),
             status = pushError.getError().request.status;
-
-        var action = pushError.getAction();
-
-        switch(action) {
-            case 'insert':
-                // This should happen only if IDs conflict and if we use GUIDs for IDs this should never happen
-                return pushError.cancelAndDiscard();
-            case 'update':
-                if (status === 404) { // The server record never existed or has been deleted
-                                      // In either case, we cancel the update
-                    return pushError.cancelAndDiscard();
-                }
-
-                if (serverRecord && clientRecord) {
-                    // If the client and server records are identical, just ignore
-                    // the conflict and discard the pending change
-                    if (serverRecord.text === clientRecord.text &&
-                        serverRecord.complete === clientRecord.complete &&
-                        serverRecord.deleted === clientRecord.deleted) {
-
-                        return pushError.cancelAndDiscard();
-                    }
-
-                    // Involve the user in conflict resolution
-                    return uiManager
-                                .resolve(serverRecord, clientRecord)
-                                .then(function(result) {
-                                    if (result === 'skip') { // skip resolving this conflict
-                                        return;
-                                    }
-
-                                    if (result === 'server') { // use the server value to resolve the conflict
-                                        return pushError.cancelAndUpdate(serverRecord);
-                                    }
-                                    
-                                    if (result === 'client') { // use the client value to resolve the conflict
-                                        result = clientRecord;
-                                    } else { // if result is not one of 'server', 'client', 'skip', we assume the user has provided a custom value for the record
-                                        result.id = serverRecord.id; // The custom value specified by the user need not have ID. We set it explicitly
-                                    }
-
-                                    result.version = serverRecord.version; // Update the version in the record to match the server version
-                                    return pushError.update(result);
-                                });
-                }
-                break;
-            case 'delete':
-                if (status === 404) { // server record never existed or has been deleted
-                    return pushError.cancelAndDiscard();
-                }
-
-                // This is a node specific check to workaround a bug 
-                if (status === 409 || (status === 412 && serverRecord.deleted)) {
-                    return pushError.cancelAndDiscard();
-                }
-
-                // server updated, client deleted. so discard client change and update client record as per server value
-                if (status === 412 && !serverRecord.deleted) {
-                    return pushError.changeAction('update', serverRecord);
-                }
-
-                break;
+            
+        if (status === 404) { // Either the server record never existed or has been deleted
+                              // In either case, we cancel the update.
+            return pushError.cancelAndDiscard();
         }
 
-        window.alert('Unhandled conflict!')
+        if (serverRecord && clientRecord) { // Server and client have conflicting changes to the record
+
+            // If the client and server records are identical, just ignore
+            // the conflict and discard the pending change
+            if (serverRecord.text === clientRecord.text &&
+                serverRecord.complete === clientRecord.complete &&
+                serverRecord.deleted === clientRecord.deleted) {
+
+                return pushError.cancelAndDiscard();
+            }
+
+            // Involve the user in conflict resolution
+            return uiManager
+                    .resolve(serverRecord, clientRecord)
+                    .then(function(result) {
+                        if (result === 'skip') { // skip resolving this conflict
+                            return;
+                        }
+
+                        if (result === 'server') { // use the server value to resolve the conflict
+                            return pushError.cancelAndUpdate(serverRecord);
+                        }
+                        
+                        if (result === 'client') { // use the client value to resolve the conflict
+                            result = clientRecord;
+                        } else { // if result is not one of 'server', 'client', 'skip', we assume the user has provided a custom value for the record
+                            result.id = serverRecord.id; // The custom value specified by the user need not have ID. We set it explicitly
+                        }
+
+                        result.version = serverRecord.version; // Update the version in the record to match the server version
+                        return pushError.update(result);
+                    });
+        }
+        break;
     }
+
+    function handleDeleteConflict(pushError) {
+
+        var status = pushError.getError().request.status
+
+        // If the server record never existed, status code will be 404
+        // If the server record has been deleted, the status code could be 404, 409 or 412 based on the scenario
+        // The node and .net backends need to be fixed so that the behavior be consistent.
+        // For now, we simply check for all possible status codes
+        if (status === 404 || status === 409 || (status === 412 && serverRecord.deleted)) {
+            return pushError.cancelAndDiscard();
+        }
+
+        // server updated, client deleted. so discard client change and update client record as per server value
+        if (status === 412 && !serverRecord.deleted) {
+            return pushError.changeAction('update', serverRecord);
+        }
+
+        return handleError('All possible errors were handled. We do not expect to be here ever!');
+    }
+
 
     /** 
      * Gets a reference to the local table
@@ -161,8 +176,7 @@ define(['./lib/es6-promise'], function(es6) {
                 .then(function() {
                     return table.pull(query);
                 }).then(undefined, function(error) {
-                    window.alert('Pull failed. Error: ' + error.message);
-                    throw error;
+                    return handleError('Pull failed. Error: ' + error.message);
                 });
     }
 
@@ -176,13 +190,17 @@ define(['./lib/es6-promise'], function(es6) {
                 })
                 .then(function(conflicts) {
                     if (conflicts.length > 0) {
-                        window.alert('Push completed with ' + conflicts.length + ' conflict(s)');
+                        return handleError('Push completed with ' + conflicts.length + ' conflict(s)');
                     }
                 }, function(error) {
-                    window.alert('Push failed. Error: ' + error.message);
-                    throw error;
+                    return handleError('Push failed. Error: ' + error.message);
                 });
     }
+
+    function handleError(error) {
+        alert(error.message);
+        throw error;
+    } 
 
     return {
         getTable: getTable,
