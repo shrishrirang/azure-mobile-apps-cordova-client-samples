@@ -22,7 +22,7 @@ define(['./lib/es6-promise'], function(es6) {
         }
 
         // Create a connection reference to our Azure Mobile Apps backend 
-        client = new WindowsAzure.MobileServiceClient('http://mobile-app-name.azurewebsites.net');
+        client = new WindowsAzure.MobileServiceClient('https://shrirs-demo.azurewebsites.net');
 
         // Create the sqlite store
         store = new WindowsAzure.MobileServiceSqliteStore();
@@ -122,7 +122,6 @@ define(['./lib/es6-promise'], function(es6) {
                         return pushError.update(result);
                     });
         }
-        break;
     }
 
     function handleDeleteConflict(pushError) {
@@ -198,6 +197,7 @@ define(['./lib/es6-promise'], function(es6) {
     }
 
     function handleError(error) {
+        uiManager.updateSummaryMessage(error.message);
         alert(error.message);
         throw error;
     } 

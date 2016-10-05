@@ -10,7 +10,8 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
     api = {
         displayItems: displayItems,
         init: init,
-        resolve: resolve
+        resolve: resolve,
+        updateSummaryMessage: updateSummaryMessage
     };
 
     return api;
@@ -82,14 +83,14 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
      */
     function displayItems() {
         // Execute a query for uncompleted items and process
-        tableManager
-            .getTable()
-            .then(function(table) {
-                return table
-                        .where({complete: false})
-                        .read();
-            })
-            .then(createTodoItemList, handleError);
+        return tableManager
+                .getTable()
+                .then(function(table) {
+                    return table
+                            .where({complete: false})
+                            .read();
+                })
+                .then(createTodoItemList, handleError);
     }
 
     /**
