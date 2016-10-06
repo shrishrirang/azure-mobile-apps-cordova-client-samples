@@ -48,7 +48,7 @@ define(['./lib/es6-promise'], function(es6) {
                                 return onConflict(pushError);
                             }
 
-                            return handleError('TODO: Handle non-conflict error!');
+                            return handleError(pushError, 'TODO: Handle non-conflict error!');
                         }
                     };
                     return syncContext.initialize(store);
@@ -74,9 +74,11 @@ define(['./lib/es6-promise'], function(es6) {
     }
 
     function handleInsertConflict(pushError) {
-        // An insert operation will conflict only if the record's ID is not generated as a GUID
-        // As we use a GUID for the record ID, there is no action needed here!
-        return handleError('Never expected the handleInsertConflict handler to be invoked!');
+        // As the record ID is a GUID, a conflict here means that the client
+        // pushed the record to the server in the past but the change was 
+        // not removed from the pending operations queue, thus pushing it again.
+        // We simply cancel this change from being pushed again.
+        return pushError.cancel();
     }
 
     function handleUpdateConflict(pushError) {
@@ -126,7 +128,8 @@ define(['./lib/es6-promise'], function(es6) {
 
     function handleDeleteConflict(pushError) {
 
-        var status = pushError.getError().request.status
+        var status = pushError.getError().request.status,
+            serverRecord = pushError.getServerRecord();
 
         // If the server record never existed, status code will be 404
         // If the server record has been deleted, the status code could be 404, 409 or 412 based on the scenario
@@ -141,7 +144,7 @@ define(['./lib/es6-promise'], function(es6) {
             return pushError.changeAction('update', serverRecord);
         }
 
-        return handleError('All possible errors were handled. We do not expect to be here ever!');
+        return handleError(pushError, 'All possible errors were handled. We do not expect to be here ever!');
     }
 
 
@@ -174,8 +177,8 @@ define(['./lib/es6-promise'], function(es6) {
         return setup()
                 .then(function() {
                     return table.pull(query);
-                }).then(undefined, function(error) {
-                    return handleError('Pull failed. Error: ' + error.message);
+                }).then(undefined, function(pushError) {
+                    return handleError(pushError, 'Pull failed. Error: ' + error.message);
                 });
     }
 
@@ -189,17 +192,21 @@ define(['./lib/es6-promise'], function(es6) {
                 })
                 .then(function(conflicts) {
                     if (conflicts.length > 0) {
-                        return handleError('Push completed with ' + conflicts.length + ' conflict(s)');
+                        return uiManager.updateSummaryMessage('Push completed with ' + conflicts.length + ' conflict(s)');
                     }
-                }, function(error) {
-                    return handleError('Push failed. Error: ' + error.message);
+                }, function(pushError) {
+                    return handleError(pushError, 'Push failed. Error: ' + error.message);
                 });
     }
 
-    function handleError(error) {
-        uiManager.updateSummaryMessage(error.message);
-        alert(error.message);
-        throw error;
+    function handleError(pushError, message) {
+        uiManager.updateSummaryMessage(message);
+
+        return pushError
+                .cancel()
+                .then(function() {
+                    throw new Error(message); // throw the error again to continue with the error chain
+                });
     } 
 
     return {

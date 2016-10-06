@@ -102,7 +102,7 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
         var textbox = $('#new-item-text'),
             itemText = textbox.val();
 
-        updateSummaryMessage('Adding New Item');
+        updateSummaryMessage('Adding new task..');
         if (itemText !== '') {
             tableManager
                 .getTable()
@@ -112,7 +112,10 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
                         complete: false
                     });
                 })
-                .then(displayItems, handleError);
+                .then(displayItems, handleError)
+                .then(function() {
+                    return updateSummaryMessage('Added task!');
+                });
         }
 
         textbox.val('').focus();
@@ -127,13 +130,16 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
     function deleteItemHandler(event) {
         var itemId = getTodoItemId(event.currentTarget);
 
-        updateSummaryMessage('Deleting Item in Azure');
+        updateSummaryMessage('Deleting task...');
         tableManager
             .getTable()
             .then(function(table) {
                 return table.del({ id: itemId })   // Async send the deletion to backend
             })
-            .then(displayItems, handleError); // Update the UI
+            .then(displayItems, handleError)
+            .then(function() {
+                return updateSummaryMessage('Deleted task!');
+            });
         
         event.preventDefault();
     }
@@ -147,13 +153,16 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
         var itemId = getTodoItemId(event.currentTarget),
             newText = $(event.currentTarget).val();
 
-        updateSummaryMessage('Updating Item in Azure');
+        updateSummaryMessage('Updating ToDo list...');
         tableManager
             .getTable()
             .then(function(table) {
                 return table.update({ id: itemId, text: newText }); // Async send the update to backend
             })
-            .then(displayItems, handleError); // Update the UI
+            .then(displayItems, handleError)
+            .then(function() {
+                return updateSummaryMessage('Updated task!');
+            });
         
         event.preventDefault();
     }
@@ -167,26 +176,32 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
         var itemId = getTodoItemId(event.currentTarget),
             isComplete = $(event.currentTarget).prop('checked');
 
-        updateSummaryMessage('Updating Item in Azure');
+        updateSummaryMessage('Updating ToDo list...');
         tableManager
             .getTable()
             .then(function(table) {
                 return table.update({ id: itemId, complete: isComplete })  // Async send the update to backend
             })
-            .then(displayItems, handleError);        // Update the UI
+            .then(displayItems, handleError)
+            .then(function() {
+                return updateSummaryMessage('Updated task!');
+            });
     }
     
     /**
      * Refresh the items within the page
      */
     function refreshData() {
-        updateSummaryMessage('Loading Data from Azure');
+        updateSummaryMessage('Refreshing ToDo list...');
 
         // Push the local changes, pull the latest changes and display the todo items
         tableManager
             .refresh()
             .then(function() {
                 return displayItems();
+            })
+            .then(function() {
+                return updateSummaryMessage('Refreshed ToDo list!');
             });
     }
     
@@ -196,7 +211,7 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
      * @returns {void}
      */
     function updateSummaryMessage(msg) {
-        $('#summary').html(msg);
+        $('#summary').html('<strong>' + msg + '</strong>');
     }
 
     /**
@@ -219,12 +234,12 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
         // Cycle through each item received from Azure and add items to the item list
         var listItems = $.map(items, createTodoItem);
         $('#todo-items').empty().append(listItems).toggle(listItems.length > 0);
-        $('#summary').html('<strong>' + items.length + '</strong> item(s)');
 
         // Wire up the event handlers for each item in the list
         $('.item-delete').on('click', deleteItemHandler);
         $('.item-text').on('change', updateItemTextHandler);
         $('.item-complete').on('change', updateItemCompleteHandler);
+
     }
 
     /**
@@ -251,6 +266,9 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
     function handleError(error) {
         var text = error + (error.request ? ' - ' + error.request.status : '');
         console.error(text);
+        updateSummaryMessage('');
         $('#errorlog').append($('<li>').text(text));
+
+        throw error;
     }
 });

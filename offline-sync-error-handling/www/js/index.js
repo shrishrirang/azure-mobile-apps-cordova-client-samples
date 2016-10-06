@@ -36,6 +36,9 @@ define(['./tableManager', './uiManager'], function(tableManager, uiManager) {
                     })
                     .then(function() {
                         return uiManager.displayItems();
+                    })
+                    .then(function() {
+                        return uiManager.updateSummaryMessage('ToDo list refreshed!');
                     });
     }
 });
