@@ -31,21 +31,22 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
         setConflictResolutionCandidate(clientRecord);
 
         $('#server').on('click', function() { // resolve using server value
+            result = 'server';
             $('#custominput').val('');
             $('#custominput').hide();
-            result = 'server';
         });
         $('#client').on('click', function() { // resolve using custom value
+            result = 'client';
             $('#custominput').val('');
             $('#custominput').hide();
-            result = 'client';
         });
         $('#skip').on('click', function() { // skip conflict resolution for this record
+            result = 'skip';
             $('#custominput').val('');
             $('#custominput').hide();
-            result = 'skip';
         });
         $('#custom').on('click', function() { // resolve using a custom user specified value
+            result = undefined;
             setConflictResolutionCandidate(clientRecord);
             $('#custominput').show();
         });
@@ -79,7 +80,6 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
         delete value.id;
         delete value.deleted;
         delete value.version;
-        result = undefined;
 
         $('#custominput').val(JSON.stringify(value));
     }
