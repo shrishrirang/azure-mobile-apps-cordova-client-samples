@@ -47,7 +47,6 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
         });
         $('#custom').on('click', function() { // resolve using a custom user specified value
             result = undefined;
-            setConflictResolutionCandidate(clientRecord);
             $('#custominput').show();
         });
 
@@ -62,7 +61,7 @@ define(['./lib/es6-promise', './tableManager'], function(es6, tableManager) {
             resizable: true,
             close: function() {
                 try {
-                    if (result === undefined) {
+                    if (result !== 'server' && result !== 'client' && result !== 'skip') {
                         result = JSON.parse($('#custominput').val());
                     }
 
